@@ -13,7 +13,7 @@ For each module, `lintme` also walks up the directory tree to find the nearest `
 ## Requirements
 
 - [`golangci-lint`](https://golangci-lint.run/usage/install/) installed and available on `PATH`
-- Go 1.26.2 or later
+- Go 1.26 or later
 
 ## Installation
 
@@ -23,28 +23,74 @@ go install github.com/StevenACoffman/lintme@latest
 
 This places the `lintme` binary in `$GOPATH/bin` (or `$GOBIN`); ensure that directory is on your `PATH`.
 
-## Usage
+## Commands
 
 Running bare `lintme` is equivalent to `lintme branch` — it detects the merge-base with the remote default branch and reports only new issues introduced on the current branch.
+
+### `lintme run` (default)
+
+Lint all modules in the workspace. Running bare `lintme` is equivalent to `lintme run` — the subcommand is optional.
 
 ```sh
 # Lint only issues introduced on the current branch (default)
 lintme
 
+# Check current branch only — do not modify files
+lintme --no-fix
+
 # Specify a base branch explicitly
 lintme -B main
 
-# Lint all modules unconditionally, applying --fix
-lintme run
-
-# Check only — do not modify files
-lintme run --no-fix
-
 # Forward extra flags to every golangci-lint invocation
 lintme -- --timeout=5m
+lintme --no-fix -- --timeout=5m --out-format=json
 
-# Print the version
-lintme version
+# Only report issues introduced since a given commit
+lintme run --new-from-rev=main
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-fix` | off | Skip `--fix`; report issues without modifying files |
+| `--new-from-rev=<rev>` | — | Pass `--new-from-rev=<rev>` to every golangci-lint invocation; only issues introduced since `<rev>` are reported |
+
+
+### `lintme pr <pr-number>`
+
+Fetch the merge-base commit of a GitHub pull request and lint only the issues introduced by that PR. Equivalent to running `lintme --new-from-rev=<merge-base>` but resolves the merge-base automatically from the GitHub API.
+
+```sh
+# Lint only issues introduced by PR #42 (repo inferred from git remote origin)
+lintme pr 42
+
+# Specify the repository explicitly
+lintme pr 42 --repo=owner/repo
+
+# Use a GitHub token for authentication
+lintme pr 42 --token=ghp_...
+
+# Forward extra flags to golangci-lint
+lintme pr 42 -- --timeout=5m
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--token=<token>` | `$GITHUB_TOKEN` | GitHub personal access token |
+| `--repo=<owner/repo>` | detected from `git remote origin` | Repository to look up |
+| `--github-url=<url>` | `$GITHUB_API_URL` | GitHub Enterprise base URL (e.g. `https://github.example.com`) |
+| `--no-fix` | off | Skip `--fix` |
+
+Without a token the GitHub API allows 60 unauthenticated requests per hour, which is enough for a single PR lookup but may be limiting in busy CI environments.
+
+`--new-from-rev` and `pr` are mutually exclusive — `pr` sets `--new-from-rev` automatically.
+
+### `lintme version`
+
+Print build and version information.
+
+```sh
+lintme version         # human-readable table
+lintme version --json  # machine-readable JSON
 ```
 
 ## Module and Config Discovery
@@ -63,6 +109,24 @@ For each module, `lintme` walks up from the module directory looking for a confi
 4. `.golangci.json`
 
 The resolved path is shown in the output header for each module. If no config file is found, `golangci-lint` is invoked without `--config` and applies its own defaults.
+
+## Environment Variables
+
+Every flag can also be set via a `LINTME_`-prefixed environment variable. The mapping rule is: prepend `LINTME_`, uppercase, replace dashes with underscores.
+
+| Flag | Environment variable |
+|------|----------------------|
+| `--no-fix` | `LINTME_NO_FIX=true` |
+| `--new-from-rev` | `LINTME_NEW_FROM_REV=<rev>` |
+
+For `pr`, the standard GitHub environment variables are also honoured directly:
+
+| Flag | Environment variable |
+|------|----------------------|
+| `--token` | `GITHUB_TOKEN` |
+| `--github-url` | `GITHUB_API_URL` |
+
+Flags supplied on the command line always take precedence over environment variables.
 
 ## Output
 
@@ -86,7 +150,7 @@ FAIL  ./services/payments: golangci-lint: exit status 1
 1/2 modules passed
 ```
 
-Output is streamed in real time as each module is linted.
+Failures in individual modules are reported but do not stop remaining modules from being linted. `lintme` exits non-zero if any module fails.
 
 ## Exit Codes
 
@@ -100,11 +164,19 @@ Output is streamed in real time as each module is linted.
 Use `lintme run --no-fix` in CI to lint all modules without modifying files. Use bare `lintme` (i.e. `lintme branch`) when you only want to report issues introduced on the current branch.
 
 ```yaml
+# Lint and fix the whole workspace
 - name: Lint changed files
   run: lintme
 
-- name: Lint all modules
-  run: lintme run --no-fix
+# Lint the whole workspace
+- name: Lint
+  run: lintme --no-fix
+
+# Lint only issues introduced by the current PR
+- name: Lint PR
+  run: lintme pr ${{ github.event.pull_request.number }} --no-fix
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## License

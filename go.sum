@@ -1,3 +1,10 @@
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/google/go-github/v86 v86.0.0 h1:S/6aANJhwRm8EQmGKVML3j41yq0h2BsTP8FnDkO7kcA=
+github.com/google/go-github/v86 v86.0.0/go.mod h1:zKv1l4SwDXNFMGByi2FWkq71KwSXqj/eQRZuqtmcot8=
+github.com/google/go-querystring v1.2.0 h1:yhqkPbu2/OH+V9BfpCVPZkNmUXhb2gBxJArfhIxNtP0=
+github.com/google/go-querystring v1.2.0/go.mod h1:8IFJqpSRITyJ8QhQ13bmbeMBDfmeEJZD5A0egEOmkqU=
 github.com/pelletier/go-toml/v2 v2.0.9 h1:uH2qQXheeefCCkuBBSLi7jCiSmj3VRh2+Goq2N7Xxu0=
 github.com/pelletier/go-toml/v2 v2.0.9/go.mod h1:tJU2Z3ZkXwnxa4DPO899bsyIoywizdUvyaeZurnPPDc=
 github.com/peterbourgon/ff/v4 v4.0.0-beta.1 h1:hV8qRu3V7YfiSMsBSfPfdcznAvPQd3jI5zDddSrDoUc=
