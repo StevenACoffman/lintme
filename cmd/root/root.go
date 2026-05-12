@@ -36,7 +36,13 @@ func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	cfg.Stderr = stderr
 	cfg.Flags = ff.NewFlagSet("lintme")
 	cfg.Flags.BoolVar(&cfg.NoFix, 0, "no-fix", "skip --fix; check only, do not modify files")
-	cfg.Flags.StringVar(&cfg.NewFromRev, 0, "new-from-rev", "", "show only new issues introduced since `rev` (passed to golangci-lint --new-from-rev)")
+	cfg.Flags.StringVar(
+		&cfg.NewFromRev,
+		0,
+		"new-from-rev",
+		"",
+		"show only new issues introduced since `rev` (passed to golangci-lint --new-from-rev)",
+	)
 	cfg.Command = &ff.Command{
 		Name:      "lintme",
 		Usage:     "lintme [--no-fix] [--new-from-rev=<rev>] [-- <golangci-lint flags>]",
