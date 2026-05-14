@@ -9,7 +9,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
@@ -51,13 +50,6 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 
 	if err := r.Command.Run(ctx); err != nil {
-		// Don't print usage help for ErrNoExec (defensive; defaultSubcommand
-		// should prevent this) or ExitError (command already reported its own
-		// outcome).
-		var exitErr root.ExitError
-		if !errors.Is(err, ff.ErrNoExec) && !errors.As(err, &exitErr) {
-			_, _ = fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(r.Command.GetSelected()))
-		}
 		return err
 	}
 

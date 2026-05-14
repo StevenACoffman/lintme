@@ -90,6 +90,38 @@ Without a token the GitHub API allows 60 unauthenticated requests per hour, whic
 
 Branch detection fails with an error if HEAD is detached or if no open PR is found for the current branch. Pass an explicit `<pr-number>` to skip detection in those cases.
 
+### `lintme branch`
+
+Find the merge-base between the current branch and a base branch, then lint only the issues introduced on the current branch. No GitHub API access is required — everything is resolved from the local git repository.
+
+By default, the base branch is the repository's default branch, discovered via `git symbolic-ref refs/remotes/origin/HEAD` (returns a ref such as `refs/remotes/origin/main`). Use `-B` / `--base` to specify a different base branch and skip the lookup entirely.
+
+The merge-base is computed with `git merge-base HEAD <base-ref>` — the same ancestor that `git diff main...` uses.
+
+```sh
+# Lint only issues introduced on the current branch (base = repo default)
+lintme branch
+
+# Use an explicit base branch instead of the repo default
+lintme branch --base develop
+lintme branch -B origin/release-2.0
+
+# Check only — do not modify files
+lintme branch --no-fix
+
+# Forward extra flags to golangci-lint
+lintme branch -- --timeout=5m
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-B, --base=<ref>` | repository's default branch | Base branch or ref for the merge-base computation; any ref accepted by `git merge-base` is valid |
+| `--no-fix` | off | Skip `--fix` |
+
+`--new-from-rev` and `branch` are mutually exclusive — `branch` sets `--new-from-rev` automatically from the merge-base.
+
+If `refs/remotes/origin/HEAD` is not configured and `--base` is not provided, `lintme branch` exits with an error and prints a hint to run `git remote set-head origin --auto`.
+
 ### `lintme version`
 
 Print build and version information.
@@ -189,6 +221,10 @@ Use `lintme run --no-fix` in CI to lint all modules without modifying files. Use
   run: lintme pr --no-fix
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# Alternative: use lintme branch (no GitHub token required)
+- name: Lint branch
+  run: lintme branch --no-fix
 ```
 
 ## License

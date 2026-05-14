@@ -1,4 +1,8 @@
 // Package branch implements the "branch" CLI command.
+// It finds the merge-base between HEAD and a base branch (defaulting to the
+// repository's default branch) and runs golangci-lint with
+// --new-from-rev=<merge-base> so that only issues introduced on the current
+// branch are reported.
 // It detects the merge-base between the current branch and the repository's
 // default remote branch, then runs golangci-lint with --new-from-rev set to
 // that merge-base so only new issues are reported.
@@ -18,6 +22,48 @@ import (
 	"github.com/StevenACoffman/lintme/cmd/root"
 	"github.com/StevenACoffman/lintme/internal/lintrun"
 )
+
+const longHelp = `Find the merge-base between the current branch and a base branch, then run
+golangci-lint with --new-from-rev=<merge-base> so that only issues introduced
+on the current branch are reported.
+
+Base branch:
+
+  By default, the base branch is the repository's default branch, resolved by
+  running:
+
+    git symbolic-ref refs/remotes/origin/HEAD
+
+  This returns a ref such as "refs/remotes/origin/main". If the command fails
+  because the remote tracking ref is not set, run:
+
+    git remote set-head origin --auto
+
+  and retry. Alternatively, pass --base to skip this lookup entirely:
+
+    lintme branch --base develop
+    lintme branch -B origin/develop
+
+  Any ref accepted by git merge-base is valid: branch names, remote tracking
+  branches (origin/main), or full refs (refs/remotes/origin/main).
+
+Merge-base:
+
+  lintme runs:
+
+    git merge-base HEAD <base-ref>
+
+  to find the common ancestor. This is the same commit that "git diff main..."
+  uses as its base.
+
+Note: --new-from-rev and the branch command are mutually exclusive. The branch
+command sets --new-from-rev automatically from the merge-base.
+
+Flags after -- are forwarded verbatim to every golangci-lint invocation:
+
+  lintme branch -- --timeout=5m
+
+golangci-lint must be present in PATH before running this command.`
 
 // refAllowed rejects ref strings that could be misinterpreted as shell
 // metacharacters or git options when passed to exec.CommandContext.
@@ -42,7 +88,7 @@ func New(parent *root.Config) *Config {
 		'B',
 		"base",
 		"",
-		"base branch to diff against (default: remote HEAD)",
+		"base branch for the merge-base computation (default: repository's default branch via git symbolic-ref refs/remotes/origin/HEAD)",
 	)
 	cfg.Command = &ff.Command{
 		Name:      "branch",
@@ -77,6 +123,12 @@ golangci-lint must be present in PATH before running this command.`,
 }
 
 func (cfg *Config) exec(ctx context.Context, extraArgs []string) error {
+	if cfg.NewFromRev != "" {
+		return errors.New(
+			"branch: --new-from-rev and the branch command are mutually exclusive; the branch command sets --new-from-rev automatically from the merge-base",
+		)
+	}
+
 	ref, err := cfg.resolveRef(ctx)
 	if err != nil {
 		return err
@@ -93,6 +145,9 @@ func (cfg *Config) exec(ctx context.Context, extraArgs []string) error {
 	)
 }
 
+// resolveRef returns the base ref to use for the merge-base computation.
+// When --base is set it validates and returns that value directly; otherwise
+// it falls back to the repository's default branch via git symbolic-ref.
 func (cfg *Config) resolveRef(ctx context.Context) (string, error) {
 	if cfg.base != "" {
 		if err := validateRef(cfg.base); err != nil {
@@ -152,11 +207,21 @@ func defaultBranch(ctx context.Context) (string, error) {
 }
 
 func mergeBase(ctx context.Context, ref string) (string, error) {
-	//nolint:gosec // ref is either a validated user flag or output from git ls-remote
+	var stdout, stderr bytes.Buffer
+	//nolint:gosec // ref is either from git symbolic-ref output or user input validated by validateRef
 	cmd := exec.CommandContext(ctx, "git", "merge-base", "HEAD", ref)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("branch: finding merge-base with %q: %w", ref, err)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail != "" {
+			return "", fmt.Errorf("branch: finding merge-base with %s: %w: %s", ref, err, detail)
+		}
+		return "", fmt.Errorf("branch: finding merge-base with %s: %w", ref, err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	sha := strings.TrimSpace(stdout.String())
+	if sha == "" {
+		return "", fmt.Errorf("branch: git merge-base HEAD %s returned empty output", ref)
+	}
+	return sha, nil
 }
