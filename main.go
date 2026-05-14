@@ -42,7 +42,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case errors.As(err, &exitErr):
 		return int(exitErr)
 	default:
-		_, _ = fmt.Fprintf(os.Stderr, "error: %+v\n", err)
+		_, _ = fmt.Fprintf(stderr, "error: %+v\n", err)
 		return exitFail
 	}
 }

@@ -20,4 +20,10 @@ type prsService interface {
 		owner, repo string,
 		number int,
 	) (*github.PullRequest, *github.Response, error)
+
+	List(
+		ctx context.Context,
+		owner, repo string,
+		opts *github.PullRequestListOptions,
+	) ([]*github.PullRequest, *github.Response, error)
 }

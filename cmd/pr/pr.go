@@ -25,6 +25,15 @@ const longHelp = `Fetch the merge-base commit of a GitHub pull request via the A
 golangci-lint with --new-from-rev=<merge-base> so that only issues introduced
 by the PR are reported.
 
+PR number:
+
+  When <pr-number> is omitted, lintme detects the open pull request that
+  belongs to the current git branch, matching the behavior of "gh pr view"
+  with no arguments. The current branch is resolved via "git rev-parse
+  --abbrev-ref HEAD" and the GitHub API is queried for an open PR whose head
+  branch matches. An error is returned if no open PR is found for the branch
+  or if HEAD is detached.
+
 Authentication:
 
   Provide a GitHub personal access token via --token or the GITHUB_TOKEN
@@ -89,7 +98,7 @@ func New(parent *root.Config) *Config {
 	)
 	cfg.Command = &ff.Command{
 		Name:      "pr",
-		Usage:     "lintme pr [--token=<token>] [--repo=owner/repo] [--no-fix] <pr-number> [-- <golangci-lint flags>]",
+		Usage:     "lintme pr [--token=<token>] [--repo=owner/repo] [--no-fix] [<pr-number>] [-- <golangci-lint flags>]",
 		ShortHelp: "lint only the files changed by a pull request",
 		LongHelp:  longHelp,
 		Flags:     cfg.Flags,
@@ -100,14 +109,16 @@ func New(parent *root.Config) *Config {
 }
 
 func (cfg *Config) exec(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		return errors.New("pr: missing required argument <pr-number>")
+	var prNum int
+	var extraArgs []string
+	if len(args) > 0 {
+		if n, err := strconv.Atoi(args[0]); err == nil && n > 0 {
+			prNum = n
+			extraArgs = args[1:]
+		} else {
+			extraArgs = args
+		}
 	}
-	prNum, err := strconv.Atoi(args[0])
-	if err != nil || prNum <= 0 {
-		return fmt.Errorf("pr: expected a positive integer PR number, got %q", args[0])
-	}
-	extraArgs := args[1:]
 
 	if cfg.NewFromRev != "" {
 		return errors.New(
@@ -120,11 +131,26 @@ func (cfg *Config) exec(ctx context.Context, args []string) error {
 		return err
 	}
 
-	hc := prdiff.NewHTTPClient(cfg.token)
-	client, err := prdiff.NewClient(hc, cfg.githubURL)
+	client, err := prdiff.NewClient(cfg.token, cfg.githubURL)
 	if err != nil {
 		return fmt.Errorf("pr: create GitHub client: %w", err)
 	}
+
+	if prNum == 0 {
+		branch, err := currentBranch(ctx)
+		if err != nil {
+			return fmt.Errorf(
+				"pr: %w\n       pass an explicit <pr-number> to skip branch detection",
+				err,
+			)
+		}
+		prNum, err = client.GetPRForBranch(ctx, owner, repo, branch)
+		if err != nil {
+			return fmt.Errorf("pr: %s/%s: %w", owner, repo, err)
+		}
+		_, _ = fmt.Fprintf(cfg.Stderr, "pr: found PR #%d for branch %q\n", prNum, branch)
+	}
+
 	mergeBase, err := client.GetMergeBase(ctx, owner, repo, prNum)
 	if err != nil {
 		return fmt.Errorf("pr: %s/%s#%d: %w", owner, repo, prNum, err)
@@ -136,6 +162,27 @@ func (cfg *Config) exec(ctx context.Context, args []string) error {
 		cfg.Config,
 		extraArgs,
 	)
+}
+
+// currentBranch returns the name of the current git branch by running
+// "git rev-parse --abbrev-ref HEAD". Returns an error if HEAD is detached.
+func currentBranch(ctx context.Context) (string, error) {
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail != "" {
+			return "", fmt.Errorf("detecting current branch: %w: %s", err, detail)
+		}
+		return "", fmt.Errorf("detecting current branch: %w", err)
+	}
+	branch := strings.TrimSpace(stdout.String())
+	if branch == "" || branch == "HEAD" {
+		return "", errors.New("not on a branch (detached HEAD state)")
+	}
+	return branch, nil
 }
 
 // resolveOwnerRepo returns the owner and repo name from the given slug,

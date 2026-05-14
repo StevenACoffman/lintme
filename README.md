@@ -54,12 +54,16 @@ lintme run --new-from-rev=main
 | `--no-fix` | off | Skip `--fix`; report issues without modifying files |
 | `--new-from-rev=<rev>` | — | Pass `--new-from-rev=<rev>` to every golangci-lint invocation; only issues introduced since `<rev>` are reported |
 
-
 ### `lintme pr <pr-number>`
 
 Fetch the merge-base commit of a GitHub pull request and lint only the issues introduced by that PR. Equivalent to running `lintme --new-from-rev=<merge-base>` but resolves the merge-base automatically from the GitHub API.
 
+When `<pr-number>` is omitted, `lintme pr` behaves like `gh pr view` with no arguments: it resolves the current branch via `git rev-parse --abbrev-ref HEAD`, queries the GitHub API for an open pull request whose head branch matches, and prints the detected PR number to stderr before proceeding.
+
 ```sh
+# Lint the PR for the current branch (number detected automatically)
+lintme pr
+
 # Lint only issues introduced by PR #42 (repo inferred from git remote origin)
 lintme pr 42
 
@@ -67,7 +71,7 @@ lintme pr 42
 lintme pr 42 --repo=owner/repo
 
 # Use a GitHub token for authentication
-lintme pr 42 --token=ghp_...
+lintme pr --token=ghp_...
 
 # Forward extra flags to golangci-lint
 lintme pr 42 -- --timeout=5m
@@ -83,6 +87,8 @@ lintme pr 42 -- --timeout=5m
 Without a token the GitHub API allows 60 unauthenticated requests per hour, which is enough for a single PR lookup but may be limiting in busy CI environments.
 
 `--new-from-rev` and `pr` are mutually exclusive — `pr` sets `--new-from-rev` automatically.
+
+Branch detection fails with an error if HEAD is detached or if no open PR is found for the current branch. Pass an explicit `<pr-number>` to skip detection in those cases.
 
 ### `lintme version`
 
@@ -172,9 +178,15 @@ Use `lintme run --no-fix` in CI to lint all modules without modifying files. Use
 - name: Lint
   run: lintme --no-fix
 
-# Lint only issues introduced by the current PR
+# Lint only issues introduced by the current PR (number passed explicitly)
 - name: Lint PR
   run: lintme pr ${{ github.event.pull_request.number }} --no-fix
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# Alternative: let lintme detect the PR from the current branch
+- name: Lint PR
+  run: lintme pr --no-fix
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
