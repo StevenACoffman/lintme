@@ -2,7 +2,6 @@ package prdiff
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/google/go-github/v86/github"
 )
@@ -14,11 +13,14 @@ type Client struct {
 }
 
 // NewClient creates a new Client.
-// baseURL is a base URL for GitHub Enterprise.
-// If baseURL is empty, github.com is used.
-// hc is used to call GitHub API using google/go-github.
-func NewClient(hc *http.Client, baseURL string) (*Client, error) {
-	gh := github.NewClient(hc)
+// token is a GitHub personal access token; pass an empty string for unauthenticated requests
+// (60 requests/hour limit applies).
+// baseURL is a base URL for GitHub Enterprise; if empty, github.com is used.
+func NewClient(token, baseURL string) (*Client, error) {
+	gh := github.NewClient(nil)
+	if token != "" {
+		gh = gh.WithAuthToken(token)
+	}
 	if baseURL != "" {
 		g, err := gh.WithEnterpriseURLs(baseURL, "")
 		if err != nil {
