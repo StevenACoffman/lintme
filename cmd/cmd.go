@@ -9,13 +9,13 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 
+	"github.com/StevenACoffman/lintme/cmd/branch"
 	"github.com/StevenACoffman/lintme/cmd/pr"
 	"github.com/StevenACoffman/lintme/cmd/root"
 	"github.com/StevenACoffman/lintme/cmd/run"
@@ -35,6 +35,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	version.New(r)
 	run.New(r)
 	pr.New(r)
+	branch.New(r)
 	// register new commands here
 
 	// Default to "run" when no subcommand is explicitly given.
@@ -49,13 +50,6 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 
 	if err := r.Command.Run(ctx); err != nil {
-		// Don't print usage help for ErrNoExec (defensive; defaultSubcommand
-		// should prevent this) or ExitError (command already reported its own
-		// outcome).
-		var exitErr root.ExitError
-		if !errors.Is(err, ff.ErrNoExec) && !errors.As(err, &exitErr) {
-			_, _ = fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(r.Command.GetSelected()))
-		}
 		return err
 	}
 
