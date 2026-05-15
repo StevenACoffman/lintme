@@ -12,10 +12,9 @@ type Client struct {
 	repo reposService
 }
 
-// NewClient creates a new Client.
-// token is a GitHub personal access token; pass an empty string for unauthenticated requests
-// (60 requests/hour limit applies).
-// baseURL is a base URL for GitHub Enterprise; if empty, github.com is used.
+// NewClient initializes a GitHub API client.
+// Pass an empty token for unauthenticated access (60 req/hour limit applies).
+// Pass a non-empty baseURL to target a GitHub Enterprise instance instead of github.com.
 func NewClient(token, baseURL string) (*Client, error) {
 	gh := github.NewClient(nil)
 	if token != "" {

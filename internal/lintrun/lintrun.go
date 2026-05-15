@@ -1,4 +1,5 @@
 // Package lintrun provides the core module-discovery and golangci-lint
+// execution loop shared by the run and branch commands.
 package lintrun
 
 import (
@@ -81,8 +82,6 @@ func printHeader(w io.Writer, mod ModuleEntry, configPath string) {
 	_, _ = fmt.Fprintf(w, "==> %s (%s)  config: %s\n", mod.Dir, mod.ModulePath, configDesc)
 }
 
-// discoverModules returns the list of modules reachable from dir.
-// It walks upward from dir looking for go.work first, then go.mod.
 func discoverModules(dir string) ([]ModuleEntry, error) {
 	if workPath, found := walkUpFind(dir, "go.work"); found {
 		return discoverFromWorkFile(workPath)
@@ -97,9 +96,6 @@ func discoverModules(dir string) ([]ModuleEntry, error) {
 	return nil, fmt.Errorf("no go.work or go.mod found in %s or any parent directory", dir)
 }
 
-// walkUpFind searches for filename starting at dir and walking toward the
-// filesystem root. It returns the absolute path of the first match and true,
-// or an empty string and false if the file is not found.
 func walkUpFind(dir, filename string) (string, bool) {
 	current := dir
 	for {
@@ -115,9 +111,6 @@ func walkUpFind(dir, filename string) (string, bool) {
 	}
 }
 
-// discoverFromWorkFile parses a go.work file and returns one ModuleEntry per
-// "use" directive, with each directory resolved relative to the work file's
-// parent directory.
 func discoverFromWorkFile(workPath string) ([]ModuleEntry, error) {
 	data, err := os.ReadFile(workPath)
 	if err != nil {
@@ -142,7 +135,6 @@ func discoverFromWorkFile(workPath string) ([]ModuleEntry, error) {
 	return entries, nil
 }
 
-// readModulePath reads the module declaration from a go.mod file.
 func readModulePath(goModPath string) (string, error) {
 	data, err := os.ReadFile(goModPath)
 	if err != nil {
@@ -158,11 +150,6 @@ func readModulePath(goModPath string) (string, error) {
 	return mf.Module.Mod.Path, nil
 }
 
-// findGolangciConfig walks upward from dir looking for a golangci-lint
-// configuration file. At each directory level it checks the names
-// .golangci.yml, .golangci.yaml, .golangci.toml, and .golangci.json in that
-// priority order before moving to the parent. It returns the absolute path of
-// the first file found, or an empty string if none is found.
 func findGolangciConfig(dir string) string {
 	configNames := []string{
 		".golangci.yml",
@@ -186,9 +173,7 @@ func findGolangciConfig(dir string) string {
 	}
 }
 
-// runLint executes golangci-lint for a single module directory. It sets
-// cmd.Dir instead of calling os.Chdir to avoid mutating global process state.
-// extraArgs are appended after ./... and forwarded verbatim to golangci-lint.
+// runLint uses cmd.Dir rather than os.Chdir to avoid mutating global process state.
 func runLint(
 	ctx context.Context,
 	lintPath, dir, configPath string,

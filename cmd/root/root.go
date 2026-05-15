@@ -28,7 +28,8 @@ type Config struct {
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
-// New returns a new root Config with the given I/O writers.
+// New wires I/O into the root config and registers the shared --no-fix and
+// --new-from-rev flags inherited by all subcommands.
 func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	var cfg Config
 	cfg.Stdin = stdin

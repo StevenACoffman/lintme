@@ -60,7 +60,8 @@ Flags after -- are forwarded verbatim to every golangci-lint invocation:
 
 golangci-lint must be present in PATH before running this command.`
 
-// Config holds the configuration for the pr command.
+// Config bundles the ff/v4 flag set, command node, GitHub credentials, and
+// the shared root config for the pr subcommand.
 type Config struct {
 	*root.Config
 	token     string
@@ -70,7 +71,7 @@ type Config struct {
 	Command   *ff.Command
 }
 
-// New creates and registers the pr command with the given parent config.
+// New self-registers the pr subcommand under parent.
 func New(parent *root.Config) *Config {
 	var cfg Config
 	cfg.Config = parent
@@ -79,7 +80,7 @@ func New(parent *root.Config) *Config {
 		&cfg.token,
 		0,
 		"token",
-		os.Getenv("GITHUB_TOKEN"),
+		"",
 		"GitHub personal access token (default: $GITHUB_TOKEN)",
 	)
 	cfg.Flags.StringVar(
@@ -93,7 +94,7 @@ func New(parent *root.Config) *Config {
 		&cfg.githubURL,
 		0,
 		"github-url",
-		os.Getenv("GITHUB_API_URL"),
+		"",
 		"GitHub API base URL for GitHub Enterprise (default: $GITHUB_API_URL)",
 	)
 	cfg.Command = &ff.Command{
@@ -126,29 +127,30 @@ func (cfg *Config) exec(ctx context.Context, args []string) error {
 		)
 	}
 
+	// GITHUB_TOKEN and GITHUB_API_URL are conventional third-party env vars;
+	// checked here as fallbacks because they don't match the LINTME_ prefix.
+	token := cfg.token
+	if token == "" {
+		token = os.Getenv("GITHUB_TOKEN")
+	}
+	githubURL := cfg.githubURL
+	if githubURL == "" {
+		githubURL = os.Getenv("GITHUB_API_URL")
+	}
+
 	owner, repo, err := resolveOwnerRepo(ctx, cfg.repo)
 	if err != nil {
 		return err
 	}
 
-	client, err := prdiff.NewClient(cfg.token, cfg.githubURL)
+	client, err := prdiff.NewClient(token, githubURL)
 	if err != nil {
 		return fmt.Errorf("pr: create GitHub client: %w", err)
 	}
 
-	if prNum == 0 {
-		branch, err := currentBranch(ctx)
-		if err != nil {
-			return fmt.Errorf(
-				"pr: %w\n       pass an explicit <pr-number> to skip branch detection",
-				err,
-			)
-		}
-		prNum, err = client.GetPRForBranch(ctx, owner, repo, branch)
-		if err != nil {
-			return fmt.Errorf("pr: %s/%s: %w", owner, repo, err)
-		}
-		_, _ = fmt.Fprintf(cfg.Stderr, "pr: found PR #%d for branch %q\n", prNum, branch)
+	prNum, err = cfg.resolvePRNum(ctx, client, owner, repo, prNum)
+	if err != nil {
+		return err
 	}
 
 	mergeBase, err := client.GetMergeBase(ctx, owner, repo, prNum)
@@ -164,8 +166,30 @@ func (cfg *Config) exec(ctx context.Context, args []string) error {
 	)
 }
 
-// currentBranch returns the name of the current git branch by running
-// "git rev-parse --abbrev-ref HEAD". Returns an error if HEAD is detached.
+func (cfg *Config) resolvePRNum(
+	ctx context.Context,
+	client *prdiff.Client,
+	owner, repo string,
+	prNum int,
+) (int, error) {
+	if prNum != 0 {
+		return prNum, nil
+	}
+	branch, err := currentBranch(ctx)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"pr: %w\n       pass an explicit <pr-number> to skip branch detection",
+			err,
+		)
+	}
+	n, err := client.GetPRForBranch(ctx, owner, repo, branch)
+	if err != nil {
+		return 0, fmt.Errorf("pr: %s/%s: %w", owner, repo, err)
+	}
+	_, _ = fmt.Fprintf(cfg.Stderr, "pr: found PR #%d for branch %q\n", n, branch)
+	return n, nil
+}
+
 func currentBranch(ctx context.Context) (string, error) {
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -185,8 +209,6 @@ func currentBranch(ctx context.Context) (string, error) {
 	return branch, nil
 }
 
-// resolveOwnerRepo returns the owner and repo name from the given slug,
-// or detects it from the "origin" git remote if slug is empty.
 func resolveOwnerRepo(ctx context.Context, slug string) (owner, repo string, err error) {
 	if slug != "" {
 		owner, repo, err = prdiff.ParseOwnerRepo(slug)

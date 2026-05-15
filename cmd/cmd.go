@@ -38,9 +38,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	branch.New(r)
 	// register new commands here
 
-	// Default to "run" when no subcommand is explicitly given.
+	// Default to "branch" when no subcommand is explicitly given.
 	// Find the first non-flag argument; if it isn't a registered subcommand
-	// name, prepend "run" so that flags like --no-fix work without typing
+	// name, prepend "branch" so that flags like --no-fix work without typing
 	// the subcommand name.
 	args = defaultSubcommand(r.Command.Subcommands, args, "branch")
 
