@@ -25,18 +25,23 @@ This places the `lintme` binary in `$GOPATH/bin` (or `$GOBIN`); ensure that dire
 
 ## Usage
 
-Running bare `lintme` is equivalent to `lintme run` — no subcommand is needed for the common case.
+Running bare `lintme` is equivalent to `lintme branch` — it detects the merge-base with the remote default branch and reports only new issues introduced on the current branch.
 
 ```sh
-# Lint all modules, applying --fix (default)
+# Lint only issues introduced on the current branch (default)
 lintme
 
+# Specify a base branch explicitly
+lintme -B main
+
+# Lint all modules unconditionally, applying --fix
+lintme run
+
 # Check only — do not modify files
-lintme --no-fix
+lintme run --no-fix
 
 # Forward extra flags to every golangci-lint invocation
 lintme -- --timeout=5m
-lintme --no-fix -- --timeout=5m --out-format=json
 
 # Print the version
 lintme version
@@ -92,11 +97,14 @@ Output is streamed in real time as each module is linted.
 
 ## CI Integration
 
-Use `--no-fix` in CI so the linter reports issues without modifying files in place.
+Use `lintme run --no-fix` in CI to lint all modules without modifying files. Use bare `lintme` (i.e. `lintme branch`) when you only want to report issues introduced on the current branch.
 
 ```yaml
-- name: Lint
-  run: lintme --no-fix
+- name: Lint changed files
+  run: lintme
+
+- name: Lint all modules
+  run: lintme run --no-fix
 ```
 
 ## License

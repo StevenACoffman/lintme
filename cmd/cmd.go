@@ -41,7 +41,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	// Find the first non-flag argument; if it isn't a registered subcommand
 	// name, prepend "run" so that flags like --no-fix work without typing
 	// the subcommand name.
-	args = defaultSubcommand(r.Command.Subcommands, args, "run")
+	args = defaultSubcommand(r.Command.Subcommands, args, "branch")
 
 	if err := r.Command.Parse(args, ff.WithEnvVarPrefix("LINTME")); err != nil {
 		_, _ = fmt.Fprintf(stderr, "\n%s\n", ffhelp.Command(r.Command))
