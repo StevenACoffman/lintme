@@ -16,6 +16,7 @@ import (
 	"github.com/peterbourgon/ff/v4"
 	"github.com/peterbourgon/ff/v4/ffhelp"
 
+	"github.com/StevenACoffman/lintme/cmd/branch"
 	"github.com/StevenACoffman/lintme/cmd/root"
 	"github.com/StevenACoffman/lintme/cmd/run"
 	"github.com/StevenACoffman/lintme/cmd/version"
@@ -33,6 +34,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	r := root.New(stdin, stdout, stderr)
 	version.New(r)
 	run.New(r)
+	branch.New(r)
 	// register new commands here
 
 	// Default to "run" when no subcommand is explicitly given.
