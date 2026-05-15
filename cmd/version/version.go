@@ -24,12 +24,7 @@ import (
 //	go build -ldflags "-X 'github.com/StevenACoffman/lintme/cmd/version.Version=v1.2.3'"
 var Version = "dev"
 
-// Option can be used to customize the Info after it is gathered from the
-// environment.
-type Option func(i *Info)
-
-// Info holds build and VCS metadata for structured output.
-type Info struct {
+type info struct {
 	GitVersion   string `json:"gitVersion"`
 	ModuleSum    string `json:"moduleChecksum"`
 	GitCommit    string `json:"gitCommit"`
@@ -39,14 +34,10 @@ type Info struct {
 	GoVersion    string `json:"goVersion"`
 	Compiler     string `json:"compiler"`
 	Platform     string `json:"platform"`
-
-	ASCIIName   string `json:"-"`
-	Name        string `json:"-"`
-	Description string `json:"-"`
-	URL         string `json:"-"`
 }
 
-// Config holds the configuration for the version command.
+// Config bundles the ff/v4 flag set, command node, JSON-output toggle, and
+// the shared root config for the version subcommand.
 type Config struct {
 	*root.Config
 	JSON    bool
@@ -54,30 +45,7 @@ type Config struct {
 	Command *ff.Command
 }
 
-// WithAppDetails allows setting the app name and description.
-func WithAppDetails(name, description, url string) Option {
-	return func(i *Info) {
-		i.Name = name
-		i.Description = description
-		i.URL = url
-	}
-}
-
-// WithASCIIName allows you to add an ASCII art of the name.
-func WithASCIIName(name string) Option {
-	return func(i *Info) {
-		i.ASCIIName = name
-	}
-}
-
-// WithBuiltBy allows to set the builder name/builder system name.
-func WithBuiltBy(name string) Option {
-	return func(i *Info) {
-		i.BuiltBy = name
-	}
-}
-
-// New creates and registers the version command with the given parent config.
+// New self-registers the version subcommand under parent.
 func New(parent *root.Config) *Config {
 	var cfg Config
 	cfg.Config = parent
@@ -95,7 +63,7 @@ Fields shown:
   GitCommit     VCS commit hash
   GitTreeState  "clean" or "dirty" (whether the working tree had uncommitted changes)
   BuildDate     timestamp of the VCS commit used for the build
-  BuiltBy       build system name when set via WithBuiltBy (e.g. goreleaser)
+  BuiltBy       build system name when set via goreleaser or similar tooling
   GoVersion     Go toolchain version (e.g. go1.23.0)
   Compiler      Go compiler name (usually "gc")
   ModuleSum     go.sum checksum of the main module
@@ -109,63 +77,9 @@ Use --json to get machine-readable output suitable for scripting.`,
 	return &cfg
 }
 
-// GetVersionInfoFrom builds an Info from an explicit BuildInfo value.
-// Passing nil returns an Info with all VCS fields set to "unknown" and
-// current runtime values for GoVersion, Compiler, and Platform.
-// This is useful for testing without touching global state.
-func GetVersionInfoFrom(bi *debug.BuildInfo, _ string, options ...Option) *Info {
-	i := gatherVersionInfo(bi)
-	for _, opt := range options {
-		opt(&i)
-	}
-	return &i
-}
-
-// String returns the string representation of the version info.
-func (i *Info) String() string {
-	b := strings.Builder{}
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-
-	if i.Name != "" {
-		if i.ASCIIName != "" {
-			_, _ = fmt.Fprint(w, i.ASCIIName)
-		}
-		_, _ = fmt.Fprint(w, i.Name)
-		if i.Description != "" {
-			_, _ = fmt.Fprintf(w, ": %s", i.Description)
-		}
-		if i.URL != "" {
-			_, _ = fmt.Fprintf(w, "\n%s", i.URL)
-		}
-		_, _ = fmt.Fprint(w, "\n\n")
-	}
-
-	_, _ = fmt.Fprintf(w, "GitVersion:\t%s\n", i.GitVersion)
-	_, _ = fmt.Fprintf(w, "GitCommit:\t%s\n", i.GitCommit)
-	_, _ = fmt.Fprintf(w, "GitTreeState:\t%s\n", i.GitTreeState)
-	_, _ = fmt.Fprintf(w, "BuildDate:\t%s\n", i.BuildDate)
-	_, _ = fmt.Fprintf(w, "BuiltBy:\t%s\n", i.BuiltBy)
-	_, _ = fmt.Fprintf(w, "GoVersion:\t%s\n", i.GoVersion)
-	_, _ = fmt.Fprintf(w, "Compiler:\t%s\n", i.Compiler)
-	_, _ = fmt.Fprintf(w, "ModuleSum:\t%s\n", i.ModuleSum)
-	_, _ = fmt.Fprintf(w, "Platform:\t%s\n", i.Platform)
-
-	_ = w.Flush()
-	return b.String()
-}
-
-// JSONString returns the JSON representation of the version info.
-func (i *Info) JSONString() (string, error) {
-	b, err := json.MarshalIndent(i, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshaling version info: %w", err)
-	}
-	return string(b), nil
-}
-
-func gatherVersionInfo(bi *debug.BuildInfo) Info {
+func getVersionInfo(bi *debug.BuildInfo) *info {
 	const unknown = "unknown"
-	info := Info{
+	i := info{
 		GitVersion:   Version,
 		ModuleSum:    unknown,
 		GitCommit:    unknown,
@@ -176,46 +90,70 @@ func gatherVersionInfo(bi *debug.BuildInfo) Info {
 		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
 	if bi == nil {
-		return info
+		return &i
 	}
 	if bi.Main.Sum != "" {
-		info.ModuleSum = bi.Main.Sum
+		i.ModuleSum = bi.Main.Sum
 	}
-	if (info.GitVersion == "dev" || info.GitVersion == "") &&
+	if (i.GitVersion == "dev" || i.GitVersion == "") &&
 		bi.Main.Version != "" && bi.Main.Version != "(devel)" {
-		info.GitVersion = bi.Main.Version
+		i.GitVersion = bi.Main.Version
 	}
 	for _, s := range bi.Settings {
 		switch s.Key {
 		case "vcs.revision":
-			info.GitCommit = s.Value
+			i.GitCommit = s.Value
 		case "vcs.modified":
 			switch s.Value {
 			case "true":
-				info.GitTreeState = "dirty"
+				i.GitTreeState = "dirty"
 			case "false":
-				info.GitTreeState = "clean"
+				i.GitTreeState = "clean"
 			}
 		case "vcs.time":
 			if t, err := time.Parse("2006-01-02T15:04:05Z", s.Value); err == nil {
-				info.BuildDate = t.Format("2006-01-02T15:04:05")
+				i.BuildDate = t.Format("2006-01-02T15:04:05")
 			}
 		}
 	}
-	return info
+	return &i
+}
+
+func (i *info) text() string {
+	b := strings.Builder{}
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintf(w, "GitVersion:\t%s\n", i.GitVersion)
+	_, _ = fmt.Fprintf(w, "GitCommit:\t%s\n", i.GitCommit)
+	_, _ = fmt.Fprintf(w, "GitTreeState:\t%s\n", i.GitTreeState)
+	_, _ = fmt.Fprintf(w, "BuildDate:\t%s\n", i.BuildDate)
+	_, _ = fmt.Fprintf(w, "BuiltBy:\t%s\n", i.BuiltBy)
+	_, _ = fmt.Fprintf(w, "GoVersion:\t%s\n", i.GoVersion)
+	_, _ = fmt.Fprintf(w, "Compiler:\t%s\n", i.Compiler)
+	_, _ = fmt.Fprintf(w, "ModuleSum:\t%s\n", i.ModuleSum)
+	_, _ = fmt.Fprintf(w, "Platform:\t%s\n", i.Platform)
+	_ = w.Flush()
+	return b.String()
+}
+
+func (i *info) json() (string, error) {
+	b, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshaling version info: %w", err)
+	}
+	return string(b), nil
 }
 
 func (cfg *Config) exec(_ context.Context, _ []string) error {
 	bi, _ := debug.ReadBuildInfo()
-	info := GetVersionInfoFrom(bi, Version)
+	i := getVersionInfo(bi)
 	if cfg.JSON {
-		s, err := info.JSONString()
+		s, err := i.json()
 		if err != nil {
 			return fmt.Errorf("version: %w", err)
 		}
 		_, _ = fmt.Fprintln(cfg.Stdout, s)
 		return nil
 	}
-	_, _ = fmt.Fprint(cfg.Stdout, info.String())
+	_, _ = fmt.Fprint(cfg.Stdout, i.text())
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,14 +27,14 @@ func main() {
 		syscall.SIGQUIT, // SIGQUIT — Ctrl+\
 		syscall.SIGTERM, // SIGTERM — polite termination request
 	)
-	code := run(ctx)
+	code := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
 }
 
 // run is intentionally separated from main to improve testability. Please preserve this comment.
-func run(ctx context.Context) int {
-	err := cmd.Run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
+func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	err := cmd.Run(ctx, args, stdin, stdout, stderr)
 	var exitErr root.ExitError
 	switch {
 	case err == nil, errors.Is(err, ff.ErrHelp), errors.Is(err, ff.ErrNoExec):
