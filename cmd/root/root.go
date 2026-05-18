@@ -21,6 +21,7 @@ type Config struct {
 	Stdout     io.Writer
 	Stderr     io.Writer
 	NoFix      bool
+	FmtOnly    bool
 	NewFromRev string
 	Flags      *ff.FlagSet
 	Command    *ff.Command
@@ -28,8 +29,8 @@ type Config struct {
 
 func (e ExitError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
-// New wires I/O into the root config and registers the shared --no-fix and
-// --new-from-rev flags inherited by all subcommands.
+// New wires I/O into the root config and registers the shared --no-fix,
+// --fmt-only, and --new-from-rev flags inherited by all subcommands.
 func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	var cfg Config
 	cfg.Stdin = stdin
@@ -37,6 +38,12 @@ func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	cfg.Stderr = stderr
 	cfg.Flags = ff.NewFlagSet("lintme")
 	cfg.Flags.BoolVar(&cfg.NoFix, 0, "no-fix", "skip --fix; check only, do not modify files")
+	cfg.Flags.BoolVar(
+		&cfg.FmtOnly,
+		0,
+		"fmt-only",
+		"run golangci-lint fmt instead of golangci-lint run",
+	)
 	cfg.Flags.StringVar(
 		&cfg.NewFromRev,
 		0,
@@ -46,7 +53,7 @@ func New(stdin io.Reader, stdout, stderr io.Writer) *Config {
 	)
 	cfg.Command = &ff.Command{
 		Name:      "lintme",
-		Usage:     "lintme [--no-fix] [--new-from-rev=<rev>] [-- <golangci-lint flags>]",
+		Usage:     "lintme [--no-fix] [--fmt-only] [--new-from-rev=<rev>] [-- <golangci-lint flags>]",
 		ShortHelp: "run golangci-lint across every module in a Go workspace",
 		Flags:     cfg.Flags,
 	}

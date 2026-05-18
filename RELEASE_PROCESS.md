@@ -29,8 +29,8 @@ without hitting API rate limits — these two variables serve different purposes
 ### 1. Tag the Release
 
 ```sh
-git tag -a v0.2.0 -m "Release v0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "Release v0.3.0"
+git push origin v0.3.0
 ```
 
 Use [semantic versioning](https://semver.org): `vMAJOR.MINOR.PATCH`.
@@ -46,7 +46,7 @@ goreleaser release --clean
 ### 3. Update This Document to Replace the Old Version Number with the Next Release Tag
 
 ```text
-
+./.github/release.sh
 ```
 
 ## Testing a Release Locally
@@ -112,7 +112,7 @@ wheel, and uploads each wheel to PyPI.
 To target a specific release tag rather than the latest:
 
 ```sh
-gowheels pypi --name lintme --package-name lintmego --repo StevenACoffman/lintme --version v0.2.0 --upload
+gowheels pypi --name lintme --package-name lintmego --repo StevenACoffman/lintme --version v0.3.0 --upload
 ```
 
 ---

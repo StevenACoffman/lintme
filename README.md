@@ -35,31 +35,81 @@ directory is on your `PATH`.
 
 ## Commands
 
-Running bare `lintme` runs `lintme run` — no subcommand needed for the common case.
+Running bare `lintme` defaults to `lintme branch` — it lints only issues
+introduced on the current branch since its merge-base with the remote default
+branch.
 
-### `lintme run` (Default)
+### `lintme branch` (Default)
 
-Lint all modules in the workspace.
+Lint only issues introduced on the current branch.
 
 ```sh
-# Lint all modules, applying --fix (default)
+# Lint issues introduced on the current branch (auto-detects merge-base)
 lintme
 
-# Check only — do not modify files
-lintme --no-fix
+# Specify the base branch explicitly
+lintme branch -B main
 
-# Report only issues introduced since a given commit
-lintme --new-from-rev=main
+# Apply formatting instead of linting
+lintme --fmt-only
 
 # Forward extra flags to every golangci-lint invocation
 lintme -- --timeout=5m
-lintme --no-fix -- --timeout=5m --out-format=json
 ```
 
-| Flag                   | Default | Description                                                                                                               |
-| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `--no-fix`             | off     | Skip `--fix`; report issues without modifying files                                                                       |
-| `--new-from-rev=<rev>` | —       | Pass `--new-from-rev=<rev>` to every golangci-lint invocation; golangci-lint reports only issues introduced since `<rev>` |
+`lintme branch` queries `git ls-remote --symref origin HEAD` to determine the
+remote default branch without requiring a local checkout. Use `-B` when there
+is no remote or the remote is not named `origin`.
+
+| Flag           | Default | Description                                                                      |
+| -------------- | ------- | -------------------------------------------------------------------------------- |
+| `-B`, `--base` | —       | Base branch for the merge-base computation; default: remote HEAD via `ls-remote` |
+
+### `lintme run`
+
+Lint all modules in the workspace, regardless of branch.
+
+```sh
+# Lint all modules, applying --fix (default)
+lintme run
+
+# Check only — do not modify files
+lintme run --no-fix
+
+# Format using golangci-lint fmt instead of golangci-lint run
+lintme run --fmt-only
+
+# Report only issues introduced since a given commit
+lintme run --new-from-rev=main
+
+# Forward extra flags to every golangci-lint invocation
+lintme run -- --timeout=5m
+lintme run --no-fix -- --timeout=5m --out-format=json
+```
+
+### `lintme pr`
+
+Lint only issues introduced by a GitHub pull request.
+
+```sh
+# Lint the PR for the current branch (auto-detects PR number)
+lintme pr
+
+# Lint a specific PR
+lintme pr 123
+
+# With an explicit token and repo
+lintme pr --token=$GITHUB_TOKEN --repo=owner/repo 123
+```
+
+When `<pr-number>` is omitted, `lintme pr` detects the open PR for the current
+branch via the GitHub API, matching the behavior of `gh pr view`.
+
+| Flag           | Default                    | Description                               |
+| -------------- | -------------------------- | ----------------------------------------- |
+| `--token`      | `$GITHUB_TOKEN`            | GitHub personal access token              |
+| `--repo`       | detected from `git remote` | Repository as `owner/repo`                |
+| `--github-url` | `$GITHUB_API_URL`          | GitHub API base URL for GitHub Enterprise |
 
 ### `lintme version`
 
@@ -69,6 +119,16 @@ Print build and version information.
 lintme version         # human-readable table
 lintme version --json  # machine-readable JSON
 ```
+
+## Shared Flags
+
+These flags work with all commands that invoke `golangci-lint`.
+
+| Flag                   | Default | Description                                                                                                               |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `--no-fix`             | off     | Skip `--fix`; report issues without modifying files                                                                       |
+| `--fmt-only`           | off     | Run `golangci-lint fmt` instead of `golangci-lint run`; mutually exclusive with `--no-fix`                                |
+| `--new-from-rev=<rev>` | —       | Pass `--new-from-rev=<rev>` to every golangci-lint invocation; golangci-lint reports only issues introduced since `<rev>` |
 
 ## Module and Config Discovery
 
@@ -100,6 +160,7 @@ mapping rule: prepend `LINTME_`, uppercase, replace dashes with underscores.
 | Flag             | Environment variable        |
 | ---------------- | --------------------------- |
 | `--no-fix`       | `LINTME_NO_FIX=true`        |
+| `--fmt-only`     | `LINTME_FMT_ONLY=true`      |
 | `--new-from-rev` | `LINTME_NEW_FROM_REV=<rev>` |
 
 Flags on the command line always take precedence over environment variables.

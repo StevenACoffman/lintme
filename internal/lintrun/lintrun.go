@@ -4,6 +4,7 @@ package lintrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -25,8 +26,13 @@ type ModuleEntry struct {
 
 // RunModules discovers Go modules reachable from the current directory,
 // then runs golangci-lint for each one sequentially, streaming output in
-// real time. It reads cfg.NoFix and cfg.NewFromRev from the shared root config.
+// real time. It reads cfg.NoFix, cfg.FmtOnly, and cfg.NewFromRev from the
+// shared root config.
 func RunModules(ctx context.Context, cfg *root.Config, extraArgs []string) error {
+	if cfg.FmtOnly && cfg.NoFix {
+		return errors.New("--fmt-only and --no-fix are mutually exclusive")
+	}
+
 	lintPath, err := exec.LookPath("golangci-lint")
 	if err != nil {
 		return fmt.Errorf("golangci-lint not found in PATH: %w", err)
@@ -56,6 +62,7 @@ func RunModules(ctx context.Context, cfg *root.Config, extraArgs []string) error
 			mod.Dir,
 			configPath,
 			!cfg.NoFix,
+			cfg.FmtOnly,
 			cfg.NewFromRev,
 			extraArgs,
 			cfg.Stdout,
@@ -178,24 +185,33 @@ func runLint(
 	ctx context.Context,
 	lintPath, dir, configPath string,
 	fix bool,
+	fmtOnly bool,
 	newFromRev string,
 	extraArgs []string,
 	stdout, stderr io.Writer,
 ) error {
-	args := []string{"run"}
-	if fix && !slices.Contains(extraArgs, "--fix") {
-		args = append(args, "--fix")
+	var args []string
+	if fmtOnly {
+		args = []string{"fmt"}
+	} else {
+		args = []string{"run"}
+		if fix && !slices.Contains(extraArgs, "--fix") {
+			args = append(args, "--fix")
+		}
+		if newFromRev != "" {
+			args = append(args, "--new-from-rev="+newFromRev)
+		}
 	}
 	if configPath != "" {
 		args = append(args, "--config="+configPath)
 	}
-	if newFromRev != "" {
-		args = append(args, "--new-from-rev="+newFromRev)
-	}
 	args = append(args, "./...")
 	args = append(args, extraArgs...)
 
-	cmd := exec.CommandContext(ctx, lintPath, args...)
+	cmd := exec.CommandContext(
+		ctx,
+		lintPath,
+		args...) //nolint:gosec // lintPath comes from exec.LookPath; args are constructed internally
 	// Send SIGINT on cancellation so golangci-lint can flush its output before exit.
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 30 * time.Second // grace period after SIGINT before forced kill
