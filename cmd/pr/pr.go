@@ -158,10 +158,10 @@ func (cfg *Config) exec(ctx context.Context, args []string) error {
 		return fmt.Errorf("pr: %s/%s#%d: %w", owner, repo, prNum, err)
 	}
 
-	cfg.NewFromRev = mergeBase
 	return lintrun.RunModules( //nolint:wrapcheck // exec delegates entirely to RunModules; wrapping would obscure the original error
 		ctx,
 		cfg.Config,
+		mergeBase,
 		extraArgs,
 	)
 }

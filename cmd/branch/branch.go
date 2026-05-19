@@ -91,10 +91,10 @@ func (cfg *Config) exec(ctx context.Context, extraArgs []string) error {
 	if err != nil {
 		return err
 	}
-	cfg.NewFromRev = mergeBaseRev
 	return lintrun.RunModules( //nolint:wrapcheck // exec delegates entirely to RunModules; wrapping would obscure the original error
 		ctx,
 		cfg.Config,
+		mergeBaseRev,
 		extraArgs,
 	)
 }

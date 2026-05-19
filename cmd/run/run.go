@@ -68,6 +68,7 @@ func (cfg *Config) exec(ctx context.Context, extraArgs []string) error {
 	return lintrun.RunModules( //nolint:wrapcheck // exec delegates entirely to RunModules; wrapping would obscure the original error
 		ctx,
 		cfg.Config,
+		cfg.NewFromRev,
 		extraArgs,
 	)
 }
